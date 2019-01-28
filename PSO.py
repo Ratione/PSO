@@ -12,7 +12,7 @@ __author__ = "Ian Minatrea"
 __date__ = "01/23/2019"
 __copyright__ = "Copyright 2019, The Helios Project"
 __email__ = "Minatrea.Ian@gmail.com"
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 __status__ = "Prototype"
 
 # ======================================================================================
@@ -23,7 +23,7 @@ import math
 import random
 #import numpy as np
 #import scipy as sp
-#import matplotlib as mp
+#import matplotlib as plt
 
 # =====================================================================================
 # Cost Function - The Function we want to Minimize
@@ -31,6 +31,9 @@ import random
 
 
 def cost(x):
+    
+    # A simple, if not the simplest cost function with any meaningful result. Arbitrary
+
     total = 0
     for i in range(len(x)):
         total += x[i] ** 2
@@ -41,101 +44,113 @@ def cost(x):
 # Main
 # =====================================================================================
 
+class Swarm:
+    """
+    This Class contains all the particles from a given swarm, and by extension, their 
+    properties.
 
-class Particle:
+    The point of these two classes being separate is purely a conceptual one, it could
+    be much more efficient, but I feel that this way best illustraits the relationship
+    between individual particle and the aggregate swarm.
+    """
+    def __init__(self):
+        self.err_bg = -1  # best error for group
+        self.pos_bg = [] # best position for group
+        self.swarm = [] # array that holds all the Particle Objects
+        
+    def __iter__(self, costFunc, x0, bounds, partNum):
+        self.cost = costFunc # The cost fuction feed into the swarm
+        self.x0 = x0
+        self.partNum = partNum
+        self.bounds = bounds
+        self.iter = 0
+        # establish the swarm
+        for i in range(0, self.partNum):
+            self.swarm.append(Particle(self.x0))
+
+    def __next__(self, maxIter):
+        # begin optimization loop
+        # cycle through particles in swarm and evaluate fitness
+
+        #print(self.iter)
+        self.iter += 1
+        
+        for i in range(0, len(self.swarm)):
+            self.swarm[i].err_i = self.cost(self.swarm[i].pos_i)
+            
+            # check to see if the current position is an individual best
+            if self.swarm[i].err_i < self.swarm[i].err_bi or self.swarm[i].err_bi == -1:
+                self.swarm[i].pos_bi = self.swarm[i].pos_i
+                self.swarm[i].err_bi = self.swarm[i].err_i
+
+            if self.swarm[i].err_i < self.err_bg or self.err_bg == -1:
+                self.pos_bg = list(self.swarm[i].pos_i)
+                self.err_bg = float(self.swarm[i].err_i)
+        
+        # cycle through swarm and update velocities and position    
+        for i in range(0, len(self.swarm)):
+            self.swarm[i].vUpdate(self.pos_bg)
+            self.swarm[i].xUpdate(self.bounds)
+
+        if self.iter > maxIter:
+            raise StopIteration
+        else:
+            return self
+
+
+class Particle(Swarm):
+    """
+    A subclass of Swarm, these particles have little meaning outsite the greater
+    context of the swarm, but nevertheless must contain their own individual 
+    properties to be referenced by the fitness algorithm. None of their stats
+    matter indiviually
+    """
     def __init__(self, x0):
-        self.position_i = []  # particle position
-        self.velocity_i = []  # particle velocity
-        self.pos_best_i = []  # best position individual
-        self.err_best_i = -1  # best error individual
-        self.err_i = -1  # error individual
+        self.pos_i = []  # particle position
+        self.vel_i = []  # particle velocity
+        self.pos_bi = []  # best position individual
+        self.err_bi = -1  # best error individual
+        self.err_i = -1 # error individual
+        self.dimNum = len(x0)
 
-        for i in range(0, num_dimensions):
-            self.velocity_i.append(random.uniform(-1, 1))
-            self.position_i.append(x0[i])
-
-    # evaluate current fitness
-    def evaluate(self, costFunc):
-        self.err_i = costFunc(self.position_i)
-
-        # check to see if the current position is an individual best
-        if self.err_i < self.err_best_i or self.err_best_i == -1:
-            self.pos_best_i = self.position_i
-            self.err_best_i = self.err_i
+        for i in range(0, self.dimNum):
+            self.vel_i.append(random.uniform(-1,1))
+            self.pos_i.append(x0[i])
 
     # update new particle velocity
-    def update_velocity(self, pos_best_g):
+    def vUpdate(self, pos_bg):
         w = 0.5  # constant inertia weight (how much to weigh the previous velocity)
         c1 = 1  # cognative constant
         c2 = 2  # social constant
 
-        for i in range(0, num_dimensions):
+        for i in range(0, self.dimNum):
             r1 = random.random()
             r2 = random.random()
 
-            vel_cognitive = c1 * r1 * (self.pos_best_i[i] - self.position_i[i])
-            vel_social = c2 * r2 * (pos_best_g[i] - self.position_i[i])
-            self.velocity_i[i] = w * self.velocity_i[i] + vel_cognitive + vel_social
+            vCog = c1 * r1 * (self.pos_bi[i] - self.pos_i[i])
+            vSoc = c2 * r2 * (pos_bg[i] - self.pos_i[i])
+            self.vel_i[i] = w * self.vel_i[i] + vCog + vSoc
 
     # update the particle position based off new velocity updates
-    def update_position(self, bounds):
-        for i in range(0, num_dimensions):
-            self.position_i[i] = self.position_i[i] + self.velocity_i[i]
+    def xUpdate(self, bounds):
+        for i in range(0, self.dimNum):
+            self.pos_i[i] = self.pos_i[i] + self.vel_i[i]
 
             # adjust maximum position if necessary
-            if self.position_i[i] > bounds[i][1]:
-                self.position_i[i] = bounds[i][1]
+            if self.pos_i[i] > bounds[i][1]:
+                self.pos_i[i] = bounds[i][1]
 
             # adjust minimum position if neseccary
-            if self.position_i[i] < bounds[i][0]:
-                self.position_i[i] = bounds[i][0]
+            if self.pos_i[i] < bounds[i][0]:
+                self.pos_i[i] = bounds[i][0]
 
+x0 = [5, 5]  # initial starting location [x1,x2...]
+bounds = [(-10, 10), (-10, 10)] # input bounds [(x1_min,x1_max),(x2_min,x2_max)...]
+pso1 = Swarm()
+pso1.__iter__(cost, x0, bounds, partNum = 15)
+for i in range(30):
+    pso1.__next__(30)
+print("FINAL:")
+print(pso1.pos_bg)
+print(pso1.err_bg)
 
-class PSO:
-    def __init__(self, costFunc, x0, bounds, num_particles, maxiter):
-        global num_dimensions
-
-        num_dimensions = len(x0)
-        err_best_g = -1  # best error for group
-        pos_best_g = []  # best position for group
-
-        # establish the swarm
-        swarm = []
-        for i in range(0, num_particles):
-            swarm.append(Particle(x0))
-
-        # begin optimization loop
-        i = 0
-        while i < maxiter:
-            # print i,err_best_g
-            # cycle through particles in swarm and evaluate fitness
-            for j in range(0, num_particles):
-                swarm[j].evaluate(costFunc)
-
-                # determine if current particle is the best (globally)
-                if swarm[j].err_i < err_best_g or err_best_g == -1:
-                    pos_best_g = list(swarm[j].position_i)
-                    err_best_g = float(swarm[j].err_i)
-
-            # cycle through swarm and update velocities and position
-            for j in range(0, num_particles):
-                swarm[j].update_velocity(pos_best_g)
-                swarm[j].update_position(bounds)
-            i += 1
-
-        # print final results
-        print("FINAL:")
-        print(pos_best_g)
-        print(err_best_g)
-
-
-if __name__ == "__PSO__":
-    main()
-
-# --- RUN ----------------------------------------------------------------------+
-
-initial = [5, 5]  # initial starting location [x1,x2...]
-bounds = [(-10, 10), (-10, 10)]  # input bounds [(x1_min,x1_max),(x2_min,x2_max)...]
-PSO(cost, initial, bounds, num_particles=15, maxiter=30)
-
-# --- END ----------------------------------------------------------------------+
